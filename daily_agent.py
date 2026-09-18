@@ -11,6 +11,7 @@ import boto3
 import certifi
 import pandas as pd
 from botocore.config import Config
+from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from twilio.base.exceptions import TwilioRestException
@@ -148,44 +149,170 @@ def generate_pdf_report(df, filename="daily_sales_report.pdf"):
     c = canvas.Canvas(filename, pagesize=letter)
     width, height = letter
 
-    # Title
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(
-        50, height - 50, f"Daily Sales & Visit Summary - {datetime.date.today()}"
-    )
+    def truncate(value, size):
+        text = str(value) if value is not None else ""
+        text = text.strip()
+        if not text:
+            return "-"
+        return text if len(text) <= size else text[: size - 3] + "..."
 
-    # Key Metrics
+    margin = 36
+    content_width = width - (2 * margin)
+
     total_entries = len(df)
+    order_series = df.get("Order Received", pd.Series([""] * total_entries))
     orders_received = len(
-        df[
-            df["Order Received"].astype(str).str.lower().isin(["yes", "quoted"])
-        ]
+        df[order_series.astype(str).str.lower().isin(["yes", "quoted", "order"])]
     )
+    unique_salesmen = (
+        df.get("Salesman Name", pd.Series([], dtype="object"))
+        .astype(str)
+        .replace("nan", "")
+        .str.strip()
+    )
+    active_salesmen = len(unique_salesmen[unique_salesmen != ""].unique())
+    quote_rate = (orders_received / total_entries * 100) if total_entries else 0
+    report_title = os.environ.get("REPORT_TITLE", "Daily Sales Performance Report")
+    primary_color = os.environ.get("REPORT_PRIMARY_COLOR", "#0F172A")
+    accent_color = os.environ.get("REPORT_ACCENT_COLOR", "#2563EB")
 
-    c.setFont("Helvetica", 12)
-    c.drawString(50, height - 80, f"Total Visits/Entries Logged: {total_entries}")
+    top_salesmen = []
+    if total_entries and "Salesman Name" in df.columns:
+        normalized_names = (
+            df["Salesman Name"].astype(str).replace("nan", "").str.strip()
+        )
+        top_salesmen = normalized_names[normalized_names != ""].value_counts().head(5)
+
+    header_height = 78
+    c.setFillColor(colors.HexColor(primary_color))
+    c.rect(0, height - header_height, width, header_height, fill=1, stroke=0)
+
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 18)
+    c.drawString(margin, height - 34, report_title)
+    c.setFont("Helvetica", 10)
     c.drawString(
-        50, height - 100, f"Quoted/Orders In Progress: {orders_received}"
+        margin,
+        height - 52,
+        f"Generated on {datetime.datetime.now().strftime('%d %b %Y, %I:%M %p')}",
     )
+    c.drawRightString(width - margin, height - 52, "Automated Reporting Agent")
 
-    # Draw Data Table Highlights
+    card_top = height - header_height - 18
+    card_height = 68
+    card_gap = 12
+    card_width = (content_width - (3 * card_gap)) / 4
+    card_specs = [
+        ("Total Entries", str(total_entries), accent_color),
+        ("Quoted or Ordered", str(orders_received), "#0D9488"),
+        ("Active Salesmen", str(active_salesmen), "#7C3AED"),
+        ("Quote Rate", f"{quote_rate:.1f}%", "#EA580C"),
+    ]
+
+    for index, (label, value, accent) in enumerate(card_specs):
+        x = margin + index * (card_width + card_gap)
+        c.setFillColor(colors.HexColor("#F8FAFC"))
+        c.roundRect(x, card_top - card_height, card_width, card_height, 8, fill=1, stroke=0)
+        c.setFillColor(colors.HexColor(accent))
+        c.rect(x, card_top - 5, card_width, 5, fill=1, stroke=0)
+        c.setFillColor(colors.HexColor("#475569"))
+        c.setFont("Helvetica", 9)
+        c.drawString(x + 10, card_top - 24, label)
+        c.setFillColor(colors.HexColor("#0F172A"))
+        c.setFont("Helvetica-Bold", 16)
+        c.drawString(x + 10, card_top - 46, value)
+
+    section_top = card_top - card_height - 22
+    c.setFillColor(colors.HexColor(primary_color))
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(margin, section_top, "Recent Visit and Sales Activity")
+
+    table_width = 376
+    panel_gap = 12
+    panel_x = margin + table_width + panel_gap
+    panel_width = content_width - table_width - panel_gap
+
+    table_headers = ["Date", "Salesman", "Customer", "Status"]
+    col_widths = [76, 88, 130, 66]
+    row_height = 20
+    header_y = section_top - 18
+
+    c.setFillColor(colors.HexColor("#E2E8F0"))
+    c.rect(margin, header_y - 4, table_width, row_height, fill=1, stroke=0)
+    c.setFillColor(colors.HexColor(primary_color))
+    c.setFont("Helvetica-Bold", 9)
+
+    col_x = margin + 8
+    for header, col_width in zip(table_headers, col_widths):
+        c.drawString(col_x, header_y + 3, header)
+        col_x += col_width
+
+    available_height = header_y - 60
+    max_rows = max(1, int(available_height / row_height))
+    recent_rows = df.tail(max_rows)
+
+    c.setFont("Helvetica", 8.5)
+    y = header_y - row_height
+    for idx, row in recent_rows.iterrows():
+        if (idx % 2) == 0:
+            c.setFillColor(colors.HexColor("#F8FAFC"))
+            c.rect(margin, y - 2, content_width, row_height, fill=1, stroke=0)
+
+        date_value = row.get("Date", row.get("Timestamp", "-"))
+        row_values = [
+            truncate(date_value, 16),
+            truncate(row.get("Salesman Name", "-"), 18),
+            truncate(row.get("Customer/Company Name", "-"), 26),
+            truncate(row.get("Current Status", "-"), 15),
+        ]
+
+        c.setFillColor(colors.HexColor("#1E293B"))
+        x = margin + 8
+        for value, col_width in zip(row_values, col_widths):
+            c.drawString(x, y + 3, value)
+            x += col_width
+
+        y -= row_height
+        if y < 54:
+            break
+
+    c.setStrokeColor(colors.HexColor("#CBD5E1"))
+    c.rect(margin, y + 20, table_width, (header_y - y - 2), fill=0, stroke=1)
+
+    panel_y = section_top - 6
+    panel_height = max(130, header_y - y + 6)
+    c.setFillColor(colors.HexColor("#F8FAFC"))
+    c.roundRect(panel_x, panel_y - panel_height, panel_width, panel_height, 8, fill=1, stroke=0)
+    c.setFillColor(colors.HexColor(accent_color))
+    c.rect(panel_x, panel_y - 5, panel_width, 5, fill=1, stroke=0)
+
+    c.setFillColor(colors.HexColor(primary_color))
     c.setFont("Helvetica-Bold", 10)
-    c.drawString(50, height - 140, "Recent Logged Visits:")
+    c.drawString(panel_x + 10, panel_y - 20, "Top 5 Salesmen")
+    c.setFont("Helvetica", 8)
+    c.setFillColor(colors.HexColor("#64748B"))
+    c.drawString(panel_x + 10, panel_y - 34, "Based on entry count for this report")
 
     c.setFont("Helvetica", 9)
-    y = height - 160
+    line_y = panel_y - 54
+    if len(top_salesmen) == 0:
+        c.setFillColor(colors.HexColor("#64748B"))
+        c.drawString(panel_x + 10, line_y, "No salesman data available")
+    else:
+        rank = 1
+        for name, count in top_salesmen.items():
+            c.setFillColor(colors.HexColor(primary_color))
+            c.drawString(panel_x + 10, line_y, f"{rank}. {truncate(name, 18)}")
+            c.drawRightString(panel_x + panel_width - 10, line_y, f"{count} entries")
+            line_y -= 18
+            rank += 1
+            if line_y < panel_y - panel_height + 16:
+                break
 
-    # Print top rows as summary
-    for idx, row in df.tail(15).iterrows():
-        salesman = str(row.get("Salesman Name", "N/A"))[:15]
-        customer = str(row.get("Customer/Company Name", "N/A"))[:20]
-        status = str(row.get("Current Status", "N/A"))[:15]
-
-        line = f"• {salesman} | {customer} | Status: {status}"
-        c.drawString(50, y, line)
-        y -= 18
-        if y < 50:
-            break
+    c.setFillColor(colors.HexColor("#64748B"))
+    c.setFont("Helvetica", 8)
+    c.drawString(margin, 28, "Prepared by Daily Agent | Source: Google Sheets")
+    c.drawRightString(width - margin, 28, f"Report Date: {datetime.date.today().isoformat()}")
 
     c.save()
     return filename

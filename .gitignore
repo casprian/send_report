@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 daily_sales_report.pdf
 Documentation/secrets.png
+Documentation/documentation.txt

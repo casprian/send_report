@@ -2,10 +2,8 @@ name: Daily WhatsApp Report Agent
 
 on:
   schedule:
-    # Runs every day  
-    # - cron: '0 6 * * *' # Runs daily at 06:00 UTC (9:00 AM AST)
-    # Runs every 10 minutes
-    - cron: '*/10 * * * *'
+    # Runs every 10 minutes, staggered to reduce scheduler contention.
+    - cron: '7,17,27,37,47,57 * * * *'
   workflow_dispatch:
 
 jobs:

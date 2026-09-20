@@ -126,7 +126,11 @@ def upload_pdf_to_s3(pdf_path):
             ContentType=content_type,
         )
 
-    use_presigned = os.environ.get("S3_USE_PRESIGNED_URL", "true").lower() == "true"
+    is_github_actions = os.environ.get("GITHUB_ACTIONS", "").lower() == "true"
+    use_presigned = (
+        os.environ.get("S3_USE_PRESIGNED_URL", "true").lower() == "true"
+        or is_github_actions
+    )
     if use_presigned:
         ttl_seconds = int(os.environ.get("S3_URL_TTL_SECONDS", "604800"))
         return s3_client.generate_presigned_url(

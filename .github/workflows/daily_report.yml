@@ -27,9 +27,9 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
           S3_REGION: ${{ secrets.S3_REGION }}
-          S3_URL_TTL_SECONDS: ${{ secrets.S3_URL_TTL_SECONDS }}
-          REQUIRE_S3_UPLOAD: ${{ secrets.REQUIRE_S3_UPLOAD }}
-          S3_USE_PRESIGNED_URL: ${{ secrets.S3_USE_PRESIGNED_URL }}
+          S3_USE_PRESIGNED_URL: "true"
+          S3_URL_TTL_SECONDS: "604800"
+          REQUIRE_S3_UPLOAD: "true"
           S3_PUBLIC_BASE_URL: ${{ secrets.S3_PUBLIC_BASE_URL }}
           REPORT_PDF_MEDIA_URL: ${{ secrets.REPORT_PDF_MEDIA_URL }}
         run: python daily_agent.py

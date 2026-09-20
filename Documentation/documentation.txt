@@ -16,12 +16,11 @@ What Has Been Implemented
 1. Google Sheet fetch is done with SSL context using certifi to avoid local certificate errors.
 2. Environment validation is in place for required runtime variables.
 3. WhatsApp number normalization supports both +123... and whatsapp:+123... formats.
-4. PDF generation includes summary metrics, KPI cards, and a professional layout.
+4. PDF generation includes summary metrics and recent entries from the sheet.
 5. S3 upload support was added for generated PDFs.
 6. Presigned S3 URL generation is enabled by default (works with private buckets).
-7. Fallback to REPORT_PDF_MEDIA_URL exists for non-CI use if S3 upload is unavailable.
+7. Fallback to REPORT_PDF_MEDIA_URL exists if S3 upload is unavailable.
 8. GitHub workflow is configured for scheduled and manual runs.
-9. In GitHub Actions, S3 upload is enforced for reliability.
 
 Local Run
 ---------
@@ -56,7 +55,6 @@ Expected Console Output
 - Rows fetched: <number>
 - Generating PDF report...
 - Sending WhatsApp message...
-- Using report URL source: <source>
 - Message sent successfully! SID: <sid>
 
 GitHub Actions Run
@@ -79,11 +77,9 @@ Troubleshooting
 ---------------
 - Error 63007 (Twilio channel not found):
   Use Twilio Sandbox sender or approved WhatsApp sender.
-- Text-only fallback message appears in local:
+- Text-only fallback message appears:
   S3 upload likely failed and fallback URL is missing/invalid.
   Check AWS credentials, bucket name, and IAM permissions.
-- GitHub Actions run fails with S3-required error:
-  S3 upload did not complete; verify AWS creds, bucket policy, and S3 region.
 - Link opens then expires:
   Presigned URLs are time-limited. Increase S3_URL_TTL_SECONDS if needed.
 - No rows or blank report:

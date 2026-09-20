@@ -107,7 +107,7 @@ def upload_pdf_to_s3(pdf_path):
         return None
 
     region = os.environ.get("S3_REGION", "us-east-1")
-    timestamp = datetime.datetime.now(datetime.UTC).strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d_%H%M%S")
     key = f"reports/{datetime.date.today().isoformat()}/daily_sales_report_{timestamp}.pdf"
 
     content_type = mimetypes.guess_type(pdf_path)[0] or "application/pdf"

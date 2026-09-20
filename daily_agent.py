@@ -75,14 +75,24 @@ def normalize_media_url(value):
     return candidate
 
 
-def is_url_reachable(url):
-    try:
-        ssl_context = ssl.create_default_context(cafile=certifi.where())
-        with urlopen(url, timeout=20, context=ssl_context) as response:
-            status_code = getattr(response, "status", 200)
-            return 200 <= status_code < 400
-    except Exception:
+def is_bucket_root_url(url):
+    if not url:
         return False
+
+    parsed = urlparse(url.strip())
+    path = parsed.path.strip("/")
+    if path:
+        return False
+
+    return ".s3." in parsed.netloc or parsed.netloc.endswith(".s3.amazonaws.com")
+
+
+def redacted_url_for_logs(url):
+    if not url:
+        return ""
+
+    parsed = urlparse(url)
+    return f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
 
 
 def build_s3_public_url(bucket, region, key):
@@ -332,16 +342,46 @@ def send_whatsapp_pdf(pdf_path, recipient_number):
     recipient_whatsapp_number = normalize_whatsapp_address(recipient_number)
 
     client = Client(account_sid, auth_token)
+    is_github_actions = os.environ.get("GITHUB_ACTIONS", "").lower() == "true"
+    require_s3_upload = (
+        os.environ.get("REQUIRE_S3_UPLOAD", "").lower() == "true"
+    ) or is_github_actions
 
     # Prefer S3 upload URL for this run; fallback to configured static URL.
     pdf_media_url = None
+    url_source = None
+    s3_upload_error = None
     try:
         pdf_media_url = upload_pdf_to_s3(pdf_path)
+        if pdf_media_url:
+            url_source = "s3-upload"
     except Exception as exc:
+        s3_upload_error = exc
         print(f"S3 upload failed, falling back to configured URL: {exc}")
 
     if not pdf_media_url:
-        pdf_media_url = normalize_media_url(os.environ.get("REPORT_PDF_MEDIA_URL"))
+        fallback_url = normalize_media_url(os.environ.get("REPORT_PDF_MEDIA_URL"))
+        if fallback_url and is_bucket_root_url(fallback_url):
+            print(
+                "REPORT_PDF_MEDIA_URL points to bucket root and cannot open a file. "
+                "Set it to a direct file URL or rely on S3 upload/presigned URLs."
+            )
+            fallback_url = None
+        pdf_media_url = fallback_url
+        if pdf_media_url:
+            url_source = "report_pdf_media_url"
+
+    if require_s3_upload and url_source != "s3-upload":
+        details = f" S3 error: {s3_upload_error}" if s3_upload_error else ""
+        raise RuntimeError(
+            "S3 upload is required for this run, but no S3 report URL was generated."
+            " Check AWS credentials, S3 bucket settings, and S3 env variables."
+            + details
+        )
+
+    if pdf_media_url:
+        print(f"Using report URL source: {url_source}")
+        print(f"Report URL (safe log): {redacted_url_for_logs(pdf_media_url)}")
 
     message_body = (
         f"📊 *Daily Sales Report - {datetime.date.today()}*\n"

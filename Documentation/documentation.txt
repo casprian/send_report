@@ -13,42 +13,42 @@ Main Files
 
 What Has Been Implemented
 -------------------------
-1. Google Sheet fetch is done with SSL context using certifi to avoid local
-	certificate errors.
+1. Google Sheet fetch is done with SSL context using certifi to avoid local certificate errors.
 2. Environment validation is in place for required runtime variables.
 3. WhatsApp number normalization supports both +123... and whatsapp:+123... formats.
-4. PDF generation includes summary metrics and recent entries from the sheet.
+4. PDF generation includes summary metrics, KPI cards, and a professional layout.
 5. S3 upload support was added for generated PDFs.
 6. Presigned S3 URL generation is enabled by default (works with private buckets).
-7. Fallback to REPORT_PDF_MEDIA_URL exists if S3 upload is unavailable.
+7. Fallback to REPORT_PDF_MEDIA_URL exists for non-CI use if S3 upload is unavailable.
 8. GitHub workflow is configured for scheduled and manual runs.
+9. In GitHub Actions, S3 upload is enforced for reliability.
 
 Local Run
 ---------
 1. Create/activate virtual environment.
 2. Install dependencies:
-	pip install pandas reportlab twilio certifi boto3
+   pip install pandas reportlab twilio certifi boto3
 3. Export environment variables (use your own real values):
 
-	export TWILIO_ACCOUNT_SID="YOUR_TWILIO_ACCOUNT_SID"
-	export TWILIO_AUTH_TOKEN="YOUR_TWILIO_AUTH_TOKEN"
-	export TWILIO_WHATSAPP_NUMBER="whatsapp:+14155238886"
-	export RECIPIENT_PHONE="+919XXXXXXXXX"
+   export TWILIO_ACCOUNT_SID="YOUR_TWILIO_ACCOUNT_SID"
+   export TWILIO_AUTH_TOKEN="YOUR_TWILIO_AUTH_TOKEN"
+   export TWILIO_WHATSAPP_NUMBER="whatsapp:+14155238886"
+   export RECIPIENT_PHONE="+919XXXXXXXXX"
 
-	# S3 (recommended)
-	export AWS_ACCESS_KEY_ID="YOUR_AWS_ACCESS_KEY_ID"
-	export AWS_SECRET_ACCESS_KEY="YOUR_AWS_SECRET_ACCESS_KEY"
-	export AWS_SESSION_TOKEN="YOUR_AWS_SESSION_TOKEN"   # optional
-	export S3_BUCKET_NAME="YOUR_BUCKET"
-	export S3_REGION="eu-north-1"
-	export S3_USE_PRESIGNED_URL="true"
-	export S3_URL_TTL_SECONDS="604800"   # 7 days
+   # S3 (recommended)
+   export AWS_ACCESS_KEY_ID="YOUR_AWS_ACCESS_KEY_ID"
+   export AWS_SECRET_ACCESS_KEY="YOUR_AWS_SECRET_ACCESS_KEY"
+   export AWS_SESSION_TOKEN="YOUR_AWS_SESSION_TOKEN"   # optional
+   export S3_BUCKET_NAME="YOUR_BUCKET"
+   export S3_REGION="eu-north-1"
+   export S3_USE_PRESIGNED_URL="true"
+   export S3_URL_TTL_SECONDS="604800"   # 7 days
 
-	# Optional fallback if S3 upload fails
-	export REPORT_PDF_MEDIA_URL="https://your-public-file-link.pdf"
+   # Optional fallback if S3 upload fails
+   export REPORT_PDF_MEDIA_URL="https://your-public-file-link.pdf"
 
 4. Run:
-	python daily_agent.py
+   python daily_agent.py
 
 Expected Console Output
 -----------------------
@@ -56,31 +56,34 @@ Expected Console Output
 - Rows fetched: <number>
 - Generating PDF report...
 - Sending WhatsApp message...
+- Using report URL source: <source>
 - Message sent successfully! SID: <sid>
 
 GitHub Actions Run
 ------------------
 1. Add repository secrets used in workflow:
-	- TWILIO_ACCOUNT_SID
-	- TWILIO_AUTH_TOKEN
-	- TWILIO_WHATSAPP_NUMBER
-	- RECIPIENT_PHONE
-	- AWS_ACCESS_KEY_ID
-	- AWS_SECRET_ACCESS_KEY
-	- AWS_SESSION_TOKEN (optional)
-	- S3_BUCKET_NAME
-	- S3_REGION
-	- S3_PUBLIC_BASE_URL (optional)
-	- REPORT_PDF_MEDIA_URL (optional fallback)
+   - TWILIO_ACCOUNT_SID
+   - TWILIO_AUTH_TOKEN
+   - TWILIO_WHATSAPP_NUMBER
+   - RECIPIENT_PHONE
+   - AWS_ACCESS_KEY_ID
+   - AWS_SECRET_ACCESS_KEY
+   - AWS_SESSION_TOKEN (optional)
+   - S3_BUCKET_NAME
+   - S3_REGION
+   - S3_PUBLIC_BASE_URL (optional)
+   - REPORT_PDF_MEDIA_URL (optional fallback)
 2. Trigger manually from Actions (workflow_dispatch), or let schedule run.
 
 Troubleshooting
 ---------------
 - Error 63007 (Twilio channel not found):
   Use Twilio Sandbox sender or approved WhatsApp sender.
-- Text-only fallback message appears:
+- Text-only fallback message appears in local:
   S3 upload likely failed and fallback URL is missing/invalid.
   Check AWS credentials, bucket name, and IAM permissions.
+- GitHub Actions run fails with S3-required error:
+  S3 upload did not complete; verify AWS creds, bucket policy, and S3 region.
 - Link opens then expires:
   Presigned URLs are time-limited. Increase S3_URL_TTL_SECONDS if needed.
 - No rows or blank report:
@@ -91,7 +94,3 @@ Security Notes
 - Do not store real credentials in files committed to git.
 - Keep all secrets in environment variables or GitHub Secrets.
 - Rotate exposed Twilio and AWS keys immediately if leaked.
-
-
-
-

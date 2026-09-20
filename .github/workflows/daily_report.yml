@@ -31,5 +31,4 @@ jobs:
           S3_URL_TTL_SECONDS: "604800"
           REQUIRE_S3_UPLOAD: "true"
           S3_PUBLIC_BASE_URL: ${{ secrets.S3_PUBLIC_BASE_URL }}
-          REPORT_PDF_MEDIA_URL: ${{ secrets.REPORT_PDF_MEDIA_URL }}
         run: python daily_agent.py

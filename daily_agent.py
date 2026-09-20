@@ -32,6 +32,19 @@ def require_env(name):
     return value
 
 
+def get_env_stripped(name, required=False):
+    value = os.environ.get(name)
+    if value is None:
+        if required:
+            raise RuntimeError(f"Missing required environment variable: {name}")
+        return None
+
+    cleaned = value.strip()
+    if required and not cleaned:
+        raise RuntimeError(f"Missing required environment variable: {name}")
+    return cleaned
+
+
 def normalize_whatsapp_address(value):
     normalized = value.strip()
     if not normalized:
@@ -102,21 +115,40 @@ def build_s3_public_url(bucket, region, key):
 
 
 def upload_pdf_to_s3(pdf_path):
-    bucket = os.environ.get("S3_BUCKET_NAME")
+    bucket = get_env_stripped("S3_BUCKET_NAME")
     if not bucket:
         return None
 
-    region = os.environ.get("S3_REGION", "us-east-1")
+    region = get_env_stripped("S3_REGION") or "us-east-1"
     timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d_%H%M%S")
     key = f"reports/{datetime.date.today().isoformat()}/daily_sales_report_{timestamp}.pdf"
 
     content_type = mimetypes.guess_type(pdf_path)[0] or "application/pdf"
+
+    aws_access_key_id = get_env_stripped("AWS_ACCESS_KEY_ID", required=True)
+    aws_secret_access_key = get_env_stripped("AWS_SECRET_ACCESS_KEY", required=True)
+    aws_session_token = get_env_stripped("AWS_SESSION_TOKEN")
+
+    if any(ch in aws_access_key_id for ch in ["\n", "\r", "\t", " "]):
+        raise RuntimeError(
+            "AWS_ACCESS_KEY_ID contains whitespace/newline. "
+            "Re-save the GitHub secret without extra spaces or line breaks."
+        )
+
+    if any(ch in aws_secret_access_key for ch in ["\n", "\r", "\t"]):
+        raise RuntimeError(
+            "AWS_SECRET_ACCESS_KEY contains newline/tab characters. "
+            "Re-save the GitHub secret without line breaks."
+        )
 
     s3_client = boto3.client(
         "s3",
         region_name=region,
         endpoint_url=f"https://s3.{region}.amazonaws.com",
         config=Config(signature_version="s3v4"),
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key,
+        aws_session_token=aws_session_token,
     )
     with open(pdf_path, "rb") as pdf_file:
         s3_client.put_object(
